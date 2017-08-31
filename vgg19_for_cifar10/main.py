@@ -25,6 +25,9 @@ log_filepath  = './vgg19_retrain_logs/'
 #     return x_train, x_test
 
 def color_preprocessing(x_train,x_test):
+    """
+    图像预处理，这里没有除以标准差
+    """
     x_train = x_train.astype('float32')
     x_test = x_test.astype('float32')
     mean = [123.680, 116.779, 103.939]
