@@ -20,7 +20,7 @@
 
 结果:
 
-![result_image](result/result.bmp)
+![result_image](result/result.jpg)
 
 # 运行
 

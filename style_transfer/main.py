@@ -29,18 +29,8 @@ def content_loss(content_features, result_features):
     Returns:
     - content loss
     """
-    # return np.sum((content_current - content_target) ** 2)
-    # https://docs.scipy.org/doc/numpy/reference/generated/numpy.linalg.norm.html
-    # return (tf.norm(content_current - content_target)) ** 2
-
+    # 不知道为什么这种写法运行结果有问题
     # return tf.square(tf.norm(content_features - result_features))
-
-    # shapes = tf.shape(content_features)
-
-    # F_l = tf.reshape(content_features, [shapes[1], shapes[2]*shapes[3]])
-    # P_l = tf.reshape(result_features,[shapes[1], shapes[2]*shapes[3]])
-
-    # loss = (tf.reduce_sum((content_features - result_features)**2))
 
     return tf.reduce_sum((content_features - result_features)**2)
 
@@ -57,24 +47,7 @@ def gram_matrix(features):
       Gram matrices for the input image.
     """
     shape = tf.shape(features)
-    # print("gram_matrix", shape)
     H, W, C = shape[1], shape[2], shape[3]
-    # 这个地方不知道为啥是这样
-    #     F = tf.reshape(features, (C, H * W))
-    #     G = tf.matmul(F, tf.transpose(F))
-    # 这边好像确实是这样的，想了下，reshape的操作不能改变原先的维度位置，
-    # 比如（1,2,3,4）只能考虑reshape成（1, （2×3）,4 ）这种
-    # 如果调换中间的顺序结果就会有些奇怪
-    # 感觉执行下这个例子就知道了：
-    # a = np.random.random((1, 2, 3, 4))
-    # b = np.reshape(a, (6, 4))
-    # c = np.reshape(a, (4, 6)) # 这个结果就很奇怪
-    # 当然这个操作本身没有问题，只是后面会有矩阵的乘法
-    # 得到的这个c无论是怎么矩阵相乘在结果上都说不通
-    # 比如按照上面的这个做法来求G（两种方法中分别用bb和cc表示）
-    # bb = np.matmul(b.T, b)
-    # cc = np.matmul(c, c.T)
-    # 这两种方式都能得到一个维度上正确的结果，但是后面这个cc就逻辑上说不通
     F = tf.reshape(features, (H*W, C))
     G = tf.matmul(F, F, transpose_a=True)
     # normalize 
@@ -120,17 +93,8 @@ SQUEEZENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 def preprocess_image(image_path):
     img = imread(image_path)
-
-    # height, width = img.shape[:2]
-    # # img = np.expand_dims(img, axis=0)
-    # img = imresize(img, 400.0 / max(height, width))
-    
-    orig_shape = np.array(img.shape[:2])
-    min_idx = np.argmin(orig_shape)
-    scale_factor = float(192) / orig_shape[min_idx]
-    new_shape = (orig_shape * scale_factor).astype(int)
-    img = imresize(img, scale_factor)
-
+    height, width = img.shape[:2]
+    img = imresize(img, 400.0 / max(height, width))
     img = (img.astype(np.float32) / 255.0 - SQUEEZENET_MEAN) / SQUEEZENET_STD
     # print(img.shape)
     return img
@@ -161,27 +125,16 @@ def get_session():
     return session
 
 def style_transfer(content_image, style_image, content_weight, style_weight, tv_weight, num_iter):
+    tf.reset_default_graph() # remove all existing variables in the graph 
+    sess = get_session() # start a new Session
+    model = SqueezeNet(save_path='model/squeezenet.ckpt', sess=sess)
+    feats = model.extract_features(model.image)
+
     content_layer = 3
     style_layers = [1, 4, 6, 7]
 
     content_image = preprocess_image(content_image)
-    # print(content_image.shape)
     style_image = preprocess_image(style_image)
-    # model = vgg16.VGG16()
-
-    # image = tf.placeholder('float',shape=[None,224,224,3],name='input_image')
-    # model.create_feed_dict(image)
-    # feats = model.layer_tensors
-    # tensors = model.get_layer_tensors(range(13))
-    # for i in [0, 1, 2, 5, 10]:
-    #     print(feats[i].shape)
-    #     print(tensors[i].shape)
-    # print(model.input.shape)
-    tf.reset_default_graph() # remove all existing variables in the graph 
-    sess = get_session() # start a new Session
-    # sess = tf.Session()
-    model = SqueezeNet(save_path='model/squeezenet.ckpt', sess=sess)
-    feats = model.extract_features(model.image)
 
     print("获取指定层应该的content_target")
     # 这里content_image[None]和np.array([content_image])的写法应该是一样的
@@ -200,7 +153,6 @@ def style_transfer(content_image, style_image, content_weight, style_weight, tv_
         })
 
     print("使用content_image生成初始化图像")
-    # print(content_image.shape)
     # 生成一张随机的图像
     # img_var = tf.Variable(tf.random_uniform(
     #     dtype=tf.float32, shape=np.array([content_image]).shape, 
@@ -208,16 +160,10 @@ def style_transfer(content_image, style_image, content_weight, style_weight, tv_
     # 使用content_image初始化
     img_var = tf.Variable(content_image[None], name='image')
 
-    # print(img_var.shape)
-    # new_image_feats = sess.run(
-    #     feats,
-    #     feed_dict={model.image: [img_var]})
     new_image_feats = model.extract_features(img_var)
 
     c_loss = content_weight * content_loss(new_image_feats[content_layer], all_content_features[content_layer])
-    # print(np.array(new_image_feats).shape)
-    # print(np.array(style_layers).shape)
-    # print(style_targets.shape)
+
     # 风格层不只有一层，计算style_loss总和
     s_loss = tf.Variable(0.0)
     for index, style_layer in zip(range(len(style_layers)), style_layers):
@@ -257,23 +203,13 @@ def style_transfer(content_image, style_image, content_weight, style_weight, tv_
         if t % 100 == 0:
             print('Iteration {}'.format(t))
             img = sess.run(img_var)
-            to_image(deprocess_image(img[0], rescale=True)).save("result/result_{}.bmp".format(t))
-            # to_image(img[0]).show()
-            # plt.imshow(to_image(img[0]))
-            # plt.axis('off')
-            # plt.show()
+            to_image(deprocess_image(img[0], rescale=True)).save("result/result_{}.jpg".format(t))
 
     img = sess.run(img_var)
     sess.close()
-    to_image(deprocess_image(img[0], rescale=True)).save("result/result.bmp")
+    to_image(deprocess_image(img[0], rescale=True)).save("result/result.jpg")
 
 if __name__ == '__main__':
-    # import sys
-    # a = float(sys.argv[1])
-    # b = float(sys.argv[2])
-    # c = float(sys.argv[3])
-    # d = int(sys.argv[4])
-
     parser = argparse.ArgumentParser(description='style transfer')
     parser.add_argument('content_image', metavar='base', type=str,
                         help='Path to the content image.')
@@ -288,15 +224,6 @@ if __name__ == '__main__':
     parser.add_argument('--tv_weight', type=float, default=2e-2, required=False,
                         help='Total Variation weight.')
     args = parser.parse_args()
-
-    # params = {
-    #     'content_image': 'images/content_image.jpg',
-    #     'style_image': 'images/style_image.jpg',
-    #     'content_weight' : 6e-2, 
-    #     'style_weight' : [300000, 1000, 15, 3],
-    #     'tv_weight' : 2e-2,
-    #     'num_iter': 200
-    # }
 
     params = {
         'content_image': args.content_image,
