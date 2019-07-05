@@ -49,7 +49,10 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        self.params['W1'] = weight_scale * np.random.randn(input_dim, hidden_dim)
+        self.params['b1'] = np.zeros(hidden_dim)
+        self.params['W2'] = weight_scale * np.random.randn(hidden_dim, num_classes)
+        self.params['b2'] = np.zeros(num_classes)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -83,7 +86,11 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        W1, W2 = self.params['W1'], self.params['W2']
+        b1, b2 = self.params['b1'], self.params['b2']
+
+        h, h_cache = affine_relu_forward(X, W1, b1)
+        scores, scores_cache = affine_forward(h, W2, b2)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -107,7 +114,16 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        loss, dout = softmax_loss(scores, y)
+        loss += 0.5 * self.reg * (np.sum(W1 ** 2) + np.sum(W2 ** 2))
+
+        dx2, dw2, db2 = affine_backward(dout, scores_cache)
+        grads["W2"] = dw2 + self.reg * W2
+        grads["b2"] = db2
+
+        dx1, dw1, db1 = affine_relu_backward(dx2, h_cache)
+        grads["W1"] = dw1 + self.reg * W1
+        grads["b1"] = db1
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -178,7 +194,15 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        last_dim = input_dim
+        for i in range(len(hidden_dims)):
+            self.params["W{}".format(i + 1)] = weight_scale * np.random.randn(last_dim, hidden_dims[i])
+            self.params["b{}".format(i + 1)] = np.zeros(hidden_dims[i])
+            # print(i, self.params["W{}".format(i + 1)].shape, self.params["b{}".format(i + 1)].shape)
+            last_dim = hidden_dims[i]
+
+        self.params["W{}".format(len(hidden_dims) + 1)] = weight_scale * np.random.randn(last_dim, num_classes)
+        self.params["b{}".format(len(hidden_dims) + 1)] = np.zeros(num_classes)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -241,7 +265,15 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        num_layers = self.num_layers
+        h = X
+        h_caches = []
+        for i in range(num_layers):
+            Wi, bi = self.params["W{}".format(i + 1)], self.params["b{}".format(i + 1)]
+            # print(h.shape, Wi.shape, bi.shape)
+            h, h_cache = affine_relu_forward(h, Wi, bi)
+            h_caches.append(h_cache)
+        scores = h
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -268,7 +300,21 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        loss, dout = softmax_loss(scores, y)
+        reg_loss = 0
+        for i in range(num_layers):
+            reg_loss += np.sum(self.params["W{}".format(i + 1)] ** 2)
+        loss += 0.5 * self.reg * reg_loss
+
+        # print("============")
+        # print(num_layers, len(h_caches))
+        for i in range(num_layers, 0, -1):
+            # print(dout.shape, np.array(h_caches[i-1]).shape)
+            dx, dw, db = affine_relu_backward(dout, h_caches[i - 1])
+            dout = dx
+            grads["W{}".format(i)] = dw + self.reg * self.params["W{}".format(i)]
+            grads["b{}".format(i)] = db
+
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
